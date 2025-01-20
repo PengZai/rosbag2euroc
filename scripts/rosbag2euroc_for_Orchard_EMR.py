@@ -169,6 +169,7 @@ def setup_dataset_dirs(rosbag_path, output_path, camera_topics, imu_topics, gt_t
 
     return cam_folder_paths, imu_folder_paths, gt_folder_paths
 
+# rosbag_2_euroc_format
 def rosbag_2_euroc(rosbag_path, output_path):
     # Check that the path to the rosbag exists.
     assert(os.path.exists(rosbag_path))
@@ -257,7 +258,7 @@ def rosbag_2_euroc(rosbag_path, output_path):
 if __name__ == "__main__":
     # Parse rosbag path.
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--rosbag_path', help='Path to the rosbag.', default='/mnt/usb/datasets/Euroc_MAV/ros_bag/V1_03_difficult_modified.bag')
+    parser.add_argument('--rosbag_path', help='Path to the rosbag.', default='/mnt/usb/datasets/Orchard_EMR_Jun_2024_save_bags/from_20240603_120008_12_to_20240603_120459_99/merge_SlowRun_SlowBag_ZED2.bag')
     parser.add_argument('-o', '--output_path', help='Path to the output.', default='./')
     args = parser.parse_args()
 

@@ -102,3 +102,9 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+*.png
+data.csv
+
+V1_03_difficult_modified
+V2_01_easy_modified
