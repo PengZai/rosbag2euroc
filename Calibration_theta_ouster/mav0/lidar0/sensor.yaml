@@ -1,0 +1,4 @@
+%YAML:1.0
+%YAML:1.0
+{T_BS: {cols: 4, data: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+      0.0, 0.0, 0.0, 1.0], rows: 4}, comment: lidar0, sensor_type: visual-inertial}
