@@ -16,6 +16,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import csv
 import numpy as np
 import sensor_msgs
+import sensor_msgs.point_cloud2 as pc2
 import open3d as o3d
 import json
 
@@ -176,6 +177,9 @@ def setup_dataset_dirs(rosbag_path, output_path, camera_topics, imu_topics, lida
         current_tf_static_folder_path = tf_static_folder_paths[-1]
         mkdirs_without_exception(current_tf_static_folder_path)
 
+        # Create data folder
+        mkdirs_without_exception(os.path.join(current_tf_static_folder_path, 'data'))
+
         # Create data.csv file
         with open(os.path.join(current_tf_static_folder_path, DATA_CSV), 'w+') as outfile:
             writer = csv.writer(outfile)
@@ -189,6 +193,9 @@ def setup_dataset_dirs(rosbag_path, output_path, camera_topics, imu_topics, lida
         current_tf_folder_path = tf_folder_paths[-1]
         mkdirs_without_exception(current_tf_folder_path)
 
+        # Create data folder
+        mkdirs_without_exception(os.path.join(current_tf_folder_path, 'data'))
+
         # Create data.csv file
         with open(os.path.join(current_tf_folder_path, DATA_CSV), 'w+') as outfile:
             writer = csv.writer(outfile)
@@ -200,7 +207,13 @@ def setup_dataset_dirs(rosbag_path, output_path, camera_topics, imu_topics, lida
     for i in range(len(lidar_topics)):
         lidar_folder_paths.append(os.path.join(base_path, LIDAR_FOLDER_NAME + repr(i)))
         current_lidar_folder_path = lidar_folder_paths[-1]
+
         mkdirs_without_exception(current_lidar_folder_path)
+
+        # Create data folder
+        mkdirs_without_exception(os.path.join(current_lidar_folder_path, 'data'))
+
+        
 
         # Create data.csv file
         with open(os.path.join(current_lidar_folder_path, DATA_CSV), 'w+') as outfile:
@@ -220,6 +233,7 @@ def setup_dataset_dirs(rosbag_path, output_path, camera_topics, imu_topics, lida
         gt_folder_paths.append(os.path.join(base_path, GT_FOLDER_NAME + repr(i)))
         current_gt_folder_path = gt_folder_paths[-1]
         mkdirs_without_exception(current_gt_folder_path)
+        
 
         # Create data.csv file
         with open(os.path.join(current_gt_folder_path, DATA_CSV), 'w+') as outfile:
@@ -269,9 +283,9 @@ def rosbag_2_euroc(rosbag_path, output_path):
             gt_topics.append(element['topic'])
         elif (element['type'] == 'sensor_msgs/PointCloud2'):
             lidar_topics.append(element['topic'])
-        elif (element['type'] == 'tf2_msgs/TFMessage' and element['topic'] == 'tf_static'):
+        elif (element['type'] == 'tf2_msgs/TFMessage' and element['topic'] == '/tf_static'):
             tf_static_topics.append(element['topic'])
-        elif (element['type'] == 'tf2_msgs/TFMessage' and element['topic'] == 'tf'):
+        elif (element['type'] == 'tf2_msgs/TFMessage' and element['topic'] == '/tf'):
             tf_topics.append(element['topic'])
 
     # Check that it has one or two Image topics.
@@ -302,15 +316,21 @@ def rosbag_2_euroc(rosbag_path, output_path):
         # Write data.csv file.
         with open(os.path.join(cam_folder_paths[i], DATA_CSV), 'a', newline='', encoding='utf-8') as outfile:
             for topic, msg, t in bag.read_messages(topics=[cam_topic]):
-                image_filename = str(msg.header.stamp) + '.png'
+
+                nsec_timestamp = str(msg.header.stamp.to_nsec())
+                image_filename = nsec_timestamp[:10]+'.'+nsec_timestamp[10:] + '.png'
                 writer = csv.writer(outfile)
                 line = [msg.header.stamp, image_filename]
                 writer.writerow(line) 
                 try:
-                    cv_image = cv_bridge.imgmsg_to_cv2(msg, msg.encoding)
-                    cv2.imwrite(os.path.join(cam_folder_paths[i], 'data/',
-                                             image_filename),
-                                cv_image)
+                    save_path = os.path.join(cam_folder_paths[i], 'data/', image_filename)
+                    if not os.path.exists(save_path):
+                        print(f"writing {save_path}")
+                        cv_image = cv_bridge.imgmsg_to_cv2(msg, msg.encoding)
+                        cv2.imwrite(save_path, cv_image)
+                    else:
+                        print(f"{save_path} has existed")
+
                 except CvBridgeError as e:
                     print(e)
 
@@ -330,16 +350,27 @@ def rosbag_2_euroc(rosbag_path, output_path):
     for i, lidar_topic in enumerate(lidar_topics):
         print(f"Converting LIDAR messages for topic: {lidar_topic}")
         print(f"Storing results in: {lidar_folder_paths[i]}")
+
         with open(os.path.join(lidar_folder_paths[i], DATA_CSV), 'a', newline='', encoding='utf-8') as outfile:
             for topic, msg, t in bag.read_messages(topics=[lidar_topic]):
-                lidar_filename = str(msg.header.stamp) + '.pcd'
 
-                points = np.array(list(sensor_msgs.point_cloud2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)))
+                nsec_timestamp = str(msg.header.stamp.to_nsec())
+                lidar_filename = nsec_timestamp[:10]+'.'+nsec_timestamp[10:] + '.pcd'
 
-                # Convert to Open3D point cloud
-                pcd = o3d.geometry.PointCloud()
-                pcd.points = o3d.utility.Vector3dVector(points)
-                o3d.io.write_point_cloud(lidar_filename, pcd)
+                save_path = os.path.join(lidar_folder_paths[i], 'data/', lidar_filename)
+                if not os.path.exists(save_path):
+                    print(f"writing {save_path}")
+                    writer = csv.writer(outfile)
+                    line = [msg.header.stamp, lidar_filename]
+                    writer.writerow(line) 
+
+                    points = np.array(list(pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)))
+                    # Convert to Open3D point cloud
+                    pcd = o3d.geometry.PointCloud()
+                    pcd.points = o3d.utility.Vector3dVector(points)
+                    o3d.io.write_point_cloud(save_path, pcd)
+                else:
+                    print(f"{save_path} has existed")
 
 
     # Convert tf msg to Euroc dataset format.
@@ -349,12 +380,12 @@ def rosbag_2_euroc(rosbag_path, output_path):
         print(f"Storing results in: {tf_static_folder_paths[i]}")
         with open(os.path.join(tf_static_folder_paths[i], DATA_CSV), 'a', newline='', encoding='utf-8') as outfile:
             for topic, msg, t in bag.read_messages(topics=[tf_static_topic]):
-                transform_filename = str(msg.header.stamp) + '.json'
-                tf_static_data = []
                 for transform in msg.transforms:
+                    nsec_timestamp = str(transform.header.stamp.to_nsec())
+                    transform_filename = nsec_timestamp[:10]+'.'+nsec_timestamp[10:] + '.json'
                     transform_dict = {
                         "header": {
-                            "stamp": transform.header.stamp.to_sec(),
+                            "stamp": str(transform.header.stamp),
                             "frame_id": transform.header.frame_id,
                         },
                         "child_frame_id": transform.child_frame_id,
@@ -372,11 +403,9 @@ def rosbag_2_euroc(rosbag_path, output_path):
                             },
                         },
                     }
-                    tf_static_data.append(transform_dict)
-                
-                with open(os.path.join(os.path.join(tf_static_folder_paths[i], 'data/',
-                                             transform_filename), "w")) as f:
-                    json.dump(tf_static_data, f, indent=4)
+                    
+                    with open(os.path.join(tf_static_folder_paths[i], 'data/', transform_filename), "w") as f:
+                        json.dump(transform_dict, f, indent=4)
 
     # Convert tf msg to Euroc dataset format.
     assert(len(tf_topics) == len(tf_folder_paths))
@@ -385,12 +414,12 @@ def rosbag_2_euroc(rosbag_path, output_path):
         print(f"Storing results in: {tf_folder_paths[i]}")
         with open(os.path.join(tf_folder_paths[i], DATA_CSV), 'a', newline='', encoding='utf-8') as outfile:
             for topic, msg, t in bag.read_messages(topics=[tf_topic]):
-                transform_filename = str(msg.header.stamp) + '.json'
-                tf_data = []
                 for transform in msg.transforms:
+                    nsec_timestamp = str(transform.header.stamp.to_nsec())
+                    transform_filename = nsec_timestamp[:10]+'.'+nsec_timestamp[10:] + '.json'
                     transform_dict = {
                         "header": {
-                            "stamp": transform.header.stamp.to_sec(),
+                            "stamp": str(transform.header.stamp),
                             "frame_id": transform.header.frame_id,
                         },
                         "child_frame_id": transform.child_frame_id,
@@ -408,11 +437,10 @@ def rosbag_2_euroc(rosbag_path, output_path):
                             },
                         },
                     }
-                    tf_data.append(transform_dict)
+                    with open(os.path.join(os.path.join(tf_folder_paths[i], 'data/', transform_filename), "w")) as f:
+                        json.dump(transform_dict, f, indent=4)
                 
-                with open(os.path.join(os.path.join(tf_folder_paths[i], 'data/',
-                                             transform_filename), "w")) as f:
-                    json.dump(tf_data, f, indent=4)
+                
 
 
 
